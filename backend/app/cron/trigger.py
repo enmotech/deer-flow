@@ -4,8 +4,6 @@ import asyncio
 import logging
 import os
 
-import httpx
-
 from app.channels.manager import DEFAULT_LANGGRAPH_URL
 
 logger = logging.getLogger(__name__)
@@ -46,55 +44,65 @@ async def trigger_agent_run(
         Exception: Re-raises the last exception after all retries are exhausted.
         RuntimeError: If _MAX_RETRIES is 0 (no attempts were made).
     """
+    from langgraph_sdk import get_client
+
     langgraph_url = get_langgraph_url()
+    client = get_client(url=langgraph_url)
+
+    # Configurable sets agent_name if custom agent requested.
     configurable: dict = {}
     if agent:
         configurable["agent_name"] = agent
 
+    # LangGraph Config object containing recursion_limit and configurable.
+    run_config = {
+        "recursion_limit": recursion_limit,
+        "configurable": configurable,
+    }
+
     last_exc: Exception | None = None
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        for attempt in range(1, _MAX_RETRIES + 1):
-            try:
-                # 1. 创建新 thread
-                resp = await client.post(f"{langgraph_url}/threads", json={})
-                resp.raise_for_status()
-                thread_id: str = resp.json()["thread_id"]
+    for attempt in range(1, _MAX_RETRIES + 1):
+        try:
+            # 1. 创建新 thread
+            thread = await client.threads.create()
+            thread_id = thread["thread_id"]
 
-                # 2. 提交 run（fire-and-forget，不等待执行完成）
-                run_resp = await client.post(
-                    f"{langgraph_url}/threads/{thread_id}/runs",
-                    json={
-                        "assistant_id": "lead_agent",
-                        "input": {
-                            "messages": [{"role": "user", "content": prompt}]
-                        },
-                        "config": {"configurable": configurable} if configurable else {},
-                        "recursion_limit": recursion_limit,
-                    },
+            # 2. 提交 run (background)
+            run = await client.runs.create(
+                thread_id,
+                "lead_agent",
+                input={"messages": [{"role": "user", "content": prompt}]},
+                config=run_config,
+            )
+            run_id = run["run_id"]
+
+            logger.info(
+                "[CRON] Job triggered: thread_id=%s run_id=%s agent=%s recursion_limit=%d",
+                thread_id,
+                run_id,
+                agent or "default",
+                recursion_limit,
+            )
+            return thread_id
+
+        except Exception as exc:
+            last_exc = exc
+            if attempt < _MAX_RETRIES:
+                delay = _RETRY_BASE_DELAY**attempt
+                logger.warning(
+                    "[CRON] trigger_agent_run failed (attempt %d/%d), retrying in %.0fs: %s",
+                    attempt,
+                    _MAX_RETRIES,
+                    delay,
+                    exc,
                 )
-                run_resp.raise_for_status()
-                run_id: str = run_resp.json()["run_id"]
-
-                logger.info(
-                    "[CRON] Job triggered: thread_id=%s run_id=%s agent=%s",
-                    thread_id, run_id, agent or "default",
+                await asyncio.sleep(delay)
+            else:
+                logger.error(
+                    "[CRON] trigger_agent_run failed after %d attempts: %s",
+                    _MAX_RETRIES,
+                    exc,
                 )
-                return thread_id
-
-            except Exception as exc:
-                last_exc = exc
-                if attempt < _MAX_RETRIES:
-                    delay = _RETRY_BASE_DELAY ** attempt
-                    logger.warning(
-                        "[CRON] trigger_agent_run failed (attempt %d/%d), retrying in %.0fs: %s",
-                        attempt, _MAX_RETRIES, delay, exc,
-                    )
-                    await asyncio.sleep(delay)
-                else:
-                    logger.error(
-                        "[CRON] trigger_agent_run failed after %d attempts: %s",
-                        _MAX_RETRIES, exc,
-                    )
 
     if last_exc is not None:
         raise last_exc
