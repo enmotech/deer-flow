@@ -13,6 +13,32 @@ logger = logging.getLogger(__name__)
 _scheduler: AsyncIOScheduler | None = None
 
 
+def _add_job_to_scheduler(
+    scheduler: AsyncIOScheduler,
+    job,  # CronJobConfig
+    global_timezone: str,
+) -> None:
+    """Add a single cron job to the scheduler instance."""
+    timezone = job.timezone or global_timezone
+
+    scheduler.add_job(
+        trigger_agent_run,
+        CronTrigger.from_crontab(job.schedule, timezone=timezone),
+        id=job.id,
+        name=job.id,
+        kwargs={
+            "prompt": job.prompt,
+            "agent": job.agent,
+        },
+        misfire_grace_time=job.misfire_grace_time,
+        coalesce=job.coalesce,
+    )
+    logger.info(
+        "Scheduled cron job: id=%s schedule='%s' agent=%s tz=%s misfire_grace=%ds",
+        job.id, job.schedule, job.agent or "default", timezone, job.misfire_grace_time,
+    )
+
+
 def setup_cron_service(config: CronConfig) -> None:
     """Initialise and start the cron scheduler.
 
@@ -60,24 +86,7 @@ def setup_cron_service(config: CronConfig) -> None:
             logger.debug("Cron job %s is disabled, skipping", job.id)
             continue
 
-        timezone = job.timezone or config.timezone
-
-        _scheduler.add_job(
-            trigger_agent_run,
-            CronTrigger.from_crontab(job.schedule, timezone=timezone),
-            id=job.id,
-            name=job.id,
-            kwargs={
-                "prompt": job.prompt,
-                "agent": job.agent,
-            },
-            misfire_grace_time=job.misfire_grace_time,
-            coalesce=job.coalesce,
-        )
-        logger.info(
-            "Scheduled cron job: id=%s schedule='%s' agent=%s tz=%s misfire_grace=%ds",
-            job.id, job.schedule, job.agent or "default", timezone, job.misfire_grace_time,
-        )
+        _add_job_to_scheduler(_scheduler, job, config.timezone)
         enabled_count += 1
 
     if enabled_count == 0:

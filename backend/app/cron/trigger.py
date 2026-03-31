@@ -1,5 +1,6 @@
 """Trigger function: creates a LangGraph thread and submits an agent run."""
 
+import asyncio
 import logging
 import os
 
@@ -43,8 +44,6 @@ async def trigger_agent_run(
         Exception: Re-raises the last exception after all retries are exhausted.
         RuntimeError: If _MAX_RETRIES is 0 (no attempts were made).
     """
-    import asyncio
-
     langgraph_url = get_langgraph_url()
     configurable: dict = {}
     if agent:
