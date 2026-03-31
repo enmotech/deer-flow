@@ -27,6 +27,7 @@ def get_langgraph_url() -> str:
 async def trigger_agent_run(
     prompt: str,
     agent: str | None = None,
+    recursion_limit: int = 100,
 ) -> str:
     """Create a new thread and submit a run to LangGraph.
 
@@ -36,6 +37,7 @@ async def trigger_agent_run(
     Args:
         prompt: User message to send to the agent.
         agent: Custom agent name. None uses the default lead_agent.
+        recursion_limit: Max number of nodes allowed for this run.
 
     Returns:
         The thread_id of the created thread.
@@ -67,6 +69,7 @@ async def trigger_agent_run(
                             "messages": [{"role": "user", "content": prompt}]
                         },
                         "config": {"configurable": configurable} if configurable else {},
+                        "recursion_limit": recursion_limit,
                     },
                 )
                 run_resp.raise_for_status()

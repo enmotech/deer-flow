@@ -16,13 +16,17 @@ _scheduler: AsyncIOScheduler | None = None
 _active_tasks: Set[asyncio.Task] = set()
 
 
-async def _run_job_with_tracking(prompt: str, agent: str | None = None) -> None:
+async def _run_job_with_tracking(
+    prompt: str,
+    agent: str | None = None,
+    recursion_limit: int = 100,
+) -> None:
     """Wrapper to track the active task during execution."""
     task = asyncio.current_task()
     if task:
         _active_tasks.add(task)
     try:
-        await trigger_agent_run(prompt, agent)
+        await trigger_agent_run(prompt, agent, recursion_limit)
     finally:
         if task:
             _active_tasks.discard(task)
@@ -44,6 +48,7 @@ def _add_job_to_scheduler(
         kwargs={
             "prompt": job.prompt,
             "agent": job.agent,
+            "recursion_limit": job.recursion_limit,
         },
         misfire_grace_time=job.misfire_grace_time,
         coalesce=job.coalesce,

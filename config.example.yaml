@@ -703,6 +703,7 @@ checkpointer:
 #       agent: postgres-dba              # custom agent name (dir under .deer-flow/agents/)
 #       prompt: "执行每日 PostgreSQL 健康巡检，生成报告并保存到 outputs"
 #       enabled: true
+#       recursion_limit: 100             # Increase if the task involves many tool calls
 #       timezone: Asia/Shanghai          # optional — overrides global timezone
 #       misfire_grace_time: 3600         # seconds; missed jobs within window are retried
 #                                        # daily jobs: 3600 (1h); alert jobs: 60 (1min)
@@ -713,6 +714,7 @@ checkpointer:
 #       agent: oracle-dba
 #       prompt: "生成本周 Oracle AWR 趋势分析报告，重点关注 Top SQL 和等待事件"
 #       enabled: true
+#       recursion_limit: 150             # Complex analytical tasks might need more steps
 #       misfire_grace_time: 7200         # 2 hours grace window for weekly jobs
 #
 #     # Example: Lock monitoring every 30 minutes (disabled by default)

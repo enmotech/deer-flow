@@ -19,6 +19,7 @@ class CronJobConfig(BaseModel):
     timezone: str | None = None            # None 表示继承全局 timezone
     misfire_grace_time: int = 300          # 单位：秒；超出此窗口的错过任务将跳过
     coalesce: bool = True                  # 积压多次触发时是否合并为一次
+    recursion_limit: int = 100             # LangGraph 递归步数限制（防止复杂任务超限中止）
 
 
 class CronConfig(BaseModel):
