@@ -681,3 +681,46 @@ checkpointer:
 #     use: my_package:MyGuardrailProvider
 #     config:
 #       key: value
+
+# ============================================================================
+# Cron Scheduler Configuration
+# ============================================================================
+# Built-in scheduled task support. Triggers agent runs at configured times via
+# the LangGraph API, following the same code path as user-initiated conversations.
+#
+# URL resolution: shares DEER_FLOW_CHANNELS_LANGGRAPH_URL with IM channels.
+# For Docker Compose deployments set: DEER_FLOW_CHANNELS_LANGGRAPH_URL=http://langgraph:2024
+#
+# cron:
+#   enabled: false
+#   # Default timezone for all jobs (IANA format). Can be overridden per job.
+#   timezone: Asia/Shanghai
+#
+#   jobs:
+#     # Example: Daily PostgreSQL health check at 02:00
+#     - id: pg-daily-check
+#       schedule: "0 2 * * *"            # standard cron: minute hour day month weekday
+#       agent: postgres-dba              # custom agent name (dir under .deer-flow/agents/)
+#       prompt: "执行每日 PostgreSQL 健康巡检，生成报告并保存到 outputs"
+#       enabled: true
+#       timezone: Asia/Shanghai          # optional — overrides global timezone
+#       misfire_grace_time: 3600         # seconds; missed jobs within window are retried
+#                                        # daily jobs: 3600 (1h); alert jobs: 60 (1min)
+#
+#     # Example: Weekly Oracle AWR analysis on Monday 03:00
+#     - id: oracle-weekly-awr
+#       schedule: "0 3 * * 1"
+#       agent: oracle-dba
+#       prompt: "生成本周 Oracle AWR 趋势分析报告，重点关注 Top SQL 和等待事件"
+#       enabled: true
+#       misfire_grace_time: 7200         # 2 hours grace window for weekly jobs
+#
+#     # Example: Lock monitoring every 30 minutes (disabled by default)
+#     - id: oracle-lock-monitor
+#       schedule: "*/30 * * * *"
+#       agent: oracle-dba
+#       prompt: "检查当前是否存在超过 5 分钟的阻塞锁，如有则生成告警报告"
+#       enabled: false
+#       misfire_grace_time: 60           # alert jobs: skip if missed by >1 minute
+#       coalesce: true                   # merge multiple missed triggers into one
+
