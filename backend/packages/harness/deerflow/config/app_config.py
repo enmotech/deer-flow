@@ -16,6 +16,7 @@ from deerflow.config.model_config import ModelConfig
 from deerflow.config.sandbox_config import SandboxConfig
 from deerflow.config.skills_config import SkillsConfig
 from deerflow.config.stream_bridge_config import StreamBridgeConfig, load_stream_bridge_config_from_dict
+from deerflow.config.cron_config import CronConfig
 from deerflow.config.subagents_config import load_subagents_config_from_dict
 from deerflow.config.summarization_config import load_summarization_config_from_dict
 from deerflow.config.title_config import load_title_config_from_dict
@@ -43,6 +44,7 @@ class AppConfig(BaseModel):
     model_config = ConfigDict(extra="allow", frozen=False)
     checkpointer: CheckpointerConfig | None = Field(default=None, description="Checkpointer configuration")
     stream_bridge: StreamBridgeConfig | None = Field(default=None, description="Stream bridge configuration")
+    cron: CronConfig = Field(default_factory=CronConfig, description="Built-in cron scheduler configuration")
 
     @classmethod
     def resolve_config_path(cls, config_path: str | None = None) -> Path:

@@ -61,7 +61,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception:
             logger.exception("No IM channels configured or channel service failed to start")
 
+        # Start cron service
+        # ValueError（非法 cron 表达式）故意不捕获，使 Gateway 启动失败并提示修正
+        try:
+            from app.cron.service import setup_cron_service
+
+            setup_cron_service(get_app_config().cron)
+        except ValueError:
+            raise  # 配置错误 → fail-fast，让 Gateway 启动失败
+        except Exception:
+            logger.exception("Failed to start cron service")  # 其他意外错误 → 记录后继续
+
         yield
+
+        # Stop cron service（在 channel service 之前停止）
+        try:
+            from app.cron.service import stop_cron_service
+
+            await stop_cron_service()
+        except Exception:
+            logger.exception("Failed to stop cron service")
 
         # Stop channel service on shutdown
         try:
@@ -70,6 +89,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             await stop_channel_service()
         except Exception:
             logger.exception("Failed to stop channel service")
+
 
     logger.info("Shutting down API Gateway")
 
