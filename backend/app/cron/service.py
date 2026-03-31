@@ -1,6 +1,8 @@
 """CronService: APScheduler-based cron scheduler for DeerFlow Gateway."""
 
+import asyncio
 import logging
+from typing import Set
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -11,6 +13,19 @@ from .trigger import trigger_agent_run
 logger = logging.getLogger(__name__)
 
 _scheduler: AsyncIOScheduler | None = None
+_active_tasks: Set[asyncio.Task] = set()
+
+
+async def _run_job_with_tracking(prompt: str, agent: str | None = None) -> None:
+    """Wrapper to track the active task during execution."""
+    task = asyncio.current_task()
+    if task:
+        _active_tasks.add(task)
+    try:
+        await trigger_agent_run(prompt, agent)
+    finally:
+        if task:
+            _active_tasks.discard(task)
 
 
 def _add_job_to_scheduler(
@@ -22,7 +37,7 @@ def _add_job_to_scheduler(
     timezone = job.timezone or global_timezone
 
     scheduler.add_job(
-        trigger_agent_run,
+        _run_job_with_tracking,
         CronTrigger.from_crontab(job.schedule, timezone=timezone),
         id=job.id,
         name=job.id,
@@ -72,7 +87,9 @@ def setup_cron_service(config: CronConfig) -> None:
         if not job.enabled:
             continue
         try:
-            CronTrigger.from_crontab(job.schedule)
+            CronTrigger.from_crontab(
+                job.schedule, timezone=job.timezone or config.timezone
+            )
         except (ValueError, TypeError) as exc:
             raise ValueError(
                 f"Cron job '{job.id}' has invalid schedule '{job.schedule}': {exc}"
@@ -98,10 +115,19 @@ def setup_cron_service(config: CronConfig) -> None:
     logger.info("Cron service started with %d job(s)", enabled_count)
 
 
-def stop_cron_service() -> None:
+async def stop_cron_service() -> None:
     """Shut down the cron scheduler, waiting for running jobs to complete."""
     global _scheduler
     if _scheduler and _scheduler.running:
-        _scheduler.shutdown(wait=True)   # 等待正在执行的 job 完成，避免半完成报告
-        logger.info("Cron service stopped")
+        _scheduler.shutdown(wait=True)
+        logger.info("Cron scheduler shut down")
+
+    # APScheduler 3.x shutdown(wait=True) doesn't wait for async tasks.
+    # We manually wait for our tracked active tasks.
+    if _active_tasks:
+        logger.info("Waiting for %d active cron task(s) to complete...", len(_active_tasks))
+        await asyncio.gather(*_active_tasks, return_exceptions=True)
+        _active_tasks.clear()
+
     _scheduler = None
+    logger.info("Cron service stopped")

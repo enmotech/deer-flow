@@ -78,7 +78,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         try:
             from app.cron.service import stop_cron_service
 
-            stop_cron_service()
+            await stop_cron_service()
         except Exception:
             logger.exception("Failed to stop cron service")
 

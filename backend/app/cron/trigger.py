@@ -50,9 +50,9 @@ async def trigger_agent_run(
         configurable["agent_name"] = agent
 
     last_exc: Exception | None = None
-    for attempt in range(1, _MAX_RETRIES + 1):
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        for attempt in range(1, _MAX_RETRIES + 1):
+            try:
                 # 1. 创建新 thread
                 resp = await client.post(f"{langgraph_url}/threads", json={})
                 resp.raise_for_status()
@@ -72,26 +72,26 @@ async def trigger_agent_run(
                 run_resp.raise_for_status()
                 run_id: str = run_resp.json()["run_id"]
 
-            logger.info(
-                "[CRON] Job triggered: thread_id=%s run_id=%s agent=%s",
-                thread_id, run_id, agent or "default",
-            )
-            return thread_id
+                logger.info(
+                    "[CRON] Job triggered: thread_id=%s run_id=%s agent=%s",
+                    thread_id, run_id, agent or "default",
+                )
+                return thread_id
 
-        except Exception as exc:
-            last_exc = exc
-            if attempt < _MAX_RETRIES:
-                delay = _RETRY_BASE_DELAY ** attempt
-                logger.warning(
-                    "[CRON] trigger_agent_run failed (attempt %d/%d), retrying in %.0fs: %s",
-                    attempt, _MAX_RETRIES, delay, exc,
-                )
-                await asyncio.sleep(delay)
-            else:
-                logger.error(
-                    "[CRON] trigger_agent_run failed after %d attempts: %s",
-                    _MAX_RETRIES, exc,
-                )
+            except Exception as exc:
+                last_exc = exc
+                if attempt < _MAX_RETRIES:
+                    delay = _RETRY_BASE_DELAY ** attempt
+                    logger.warning(
+                        "[CRON] trigger_agent_run failed (attempt %d/%d), retrying in %.0fs: %s",
+                        attempt, _MAX_RETRIES, delay, exc,
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(
+                        "[CRON] trigger_agent_run failed after %d attempts: %s",
+                        _MAX_RETRIES, exc,
+                    )
 
     if last_exc is not None:
         raise last_exc
