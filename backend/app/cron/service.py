@@ -49,7 +49,7 @@ def _add_job_to_scheduler(
         coalesce=job.coalesce,
     )
     logger.info(
-        "Scheduled cron job: id=%s schedule='%s' agent=%s tz=%s misfire_grace=%ds",
+        "[CRON] Scheduled cron job: id=%s schedule='%s' agent=%s tz=%s misfire_grace=%ds",
         job.id, job.schedule, job.agent or "default", timezone, job.misfire_grace_time,
     )
 
@@ -74,11 +74,11 @@ def setup_cron_service(config: CronConfig) -> None:
 
     # 幂等保护：已运行则跳过
     if _scheduler is not None and _scheduler.running:
-        logger.warning("Cron service already running, skipping setup")
+        logger.warning("[CRON] Cron service already running, skipping setup")
         return
 
     if not config.enabled or not config.jobs:
-        logger.info("Cron service disabled or no jobs configured, skipping")
+        logger.info("[CRON] Cron service disabled or no jobs configured, skipping")
         return
 
     # Validate all enabled job schedules before starting the scheduler.
@@ -100,19 +100,19 @@ def setup_cron_service(config: CronConfig) -> None:
     enabled_count = 0
     for job in config.jobs:
         if not job.enabled:
-            logger.debug("Cron job %s is disabled, skipping", job.id)
+            logger.debug("[CRON] Cron job %s is disabled, skipping", job.id)
             continue
 
         _add_job_to_scheduler(_scheduler, job, config.timezone)
         enabled_count += 1
 
     if enabled_count == 0:
-        logger.info("No enabled cron jobs found")
+        logger.info("[CRON] No enabled cron jobs found")
         _scheduler = None
         return
 
     _scheduler.start()
-    logger.info("Cron service started with %d job(s)", enabled_count)
+    logger.info("[CRON] Cron service started with %d job(s)", enabled_count)
 
 
 async def stop_cron_service() -> None:
@@ -120,14 +120,14 @@ async def stop_cron_service() -> None:
     global _scheduler
     if _scheduler and _scheduler.running:
         _scheduler.shutdown(wait=True)
-        logger.info("Cron scheduler shut down")
+        logger.info("[CRON] Cron scheduler shut down")
 
     # APScheduler 3.x shutdown(wait=True) doesn't wait for async tasks.
     # We manually wait for our tracked active tasks.
     if _active_tasks:
-        logger.info("Waiting for %d active cron task(s) to complete...", len(_active_tasks))
+        logger.info("[CRON] Waiting for %d active cron task(s) to complete...", len(_active_tasks))
         await asyncio.gather(*_active_tasks, return_exceptions=True)
         _active_tasks.clear()
 
     _scheduler = None
-    logger.info("Cron service stopped")
+    logger.info("[CRON] Cron service stopped")
